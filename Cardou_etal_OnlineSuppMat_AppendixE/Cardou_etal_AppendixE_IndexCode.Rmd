@@ -1,0 +1,348 @@
+---
+title: "Appendix E"
+author: "Cardou et al."
+date: "may 2020"
+params:
+  report_title: NA
+  absolute_application_path: NA
+output: 
+  word_document:
+    reference_docx: "C:/Users/franc/OneDrive/Documents/02_Doctorat/03_Ecosystem services and traits/MS_Indicators/Appendix/MS_FCardou_Indicator_MarkdownWordTemplate.docx"
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = T,
+                      cache = F,
+                      tidy = F,
+                      strip.white = FALSE,
+                      tidy.opts = list(blank = FALSE, 
+                                       width.cutoff = 60))
+
+```
+
+### Appendix E Calculating the functional Mahalanobis distance using R
+
+Functional markers provide one practical way of estimating ecosystem properties from local-scale vegetation inventories and readily available trait information. This appendix aims to provide the R code necessary for academic and practicing ecologists to understand our proposed method and to apply it to their own data. The data necessary for this code is available from Cardou (2020). This will allow users to compute ecosystem property estimates from the functional markers of Cardou et al. (2020) and Functional Mahalanobis distances for themselves. Ecologists who already have direct measurements for various dimensions of multifunctionality and are interested in aggregating these to obtain a single quantitative measure of multifunctionality can skip to the last section of this appendix.
+
+Several methods to aggregate information on ecosystem functioning in order to quantify multifunctionality have been proposed (e.g. Manning et al. 2018). These methods have focused primarily on two common scenarios. For instance, these methods address the need to quantify pairwise differences in overall ecosystem performance in cases where no specific point in multidimentional space can be specified as "better". This is commonly used to assess the relationship between biodiversity and ecosystem multifunctionality. Another reason to quantify ecosystem multifunctionality is to access the overall capacity of ecosystems to provide ecosystem services. This is an alternative meaning of "multifunctionality" that is especially common in urban areas, where the capacity of ecosystems to carry out desired functions is a recurring management preoccupation. In such cases, the goal is to quantify the distance of a site relative to some maximal point across all dimensions of multifunctionality, and involves no variability.
+
+The management scenario addressed in this paper represents a hybrid case between these two cases. Land stewards that characterize urban woodlands to inform various conservation decisions routinely aim to position woodlands relative to some socially-defined acceptable range of variability (Parrish et al. 2003). In this case, individual sites must be positioned relative to some subjective point, but also take into consideration the natural variation that can exist in each dimension. Additionally, to capture the range of management contexts in which they are used, such methods should be able to accomodate a large number of dimensions, and be robust to varying levels of correlation among these. The Mahalanobis distance (Legendre and Legendre 2012) provides a flexible single-step method that can be used to quantify pairwise distances for an entire set of sites, site distance to a single point in multidimentional space (such as a maximal point), weighted by the variance structure of all sites, or site distance relative to the mean and variance structure of a subset of sites, representing some desired range of variability. While the implementation presented here is specific to this last case, it can easily be modified to accomodate the first two.
+
+
+```{r message = FALSE, warning = FALSE}
+rm(list=ls())
+
+library(FD)
+library(car)
+library(ggplot2)
+library(plot3D)
+library(knitr)
+
+```
+
+#### Step 1 - Load data
+
+Site-by-Species table of relative occurence for the whole community and for the understory (0-6m), structured in the same way.
+
+```{r}
+
+comm_raw <- read.csv("./data/L_matrix.csv", sep = ";")
+comm_sbstrate_raw <- read.csv("./data/L_Matrix_sbstrate.csv", sep = ";")
+
+head(comm_raw[,1:6])
+dim(comm_raw)
+```
+
+Species-by-Traits table for all species in the Site-by-Species table
+
+```{r}
+
+Q <- read.csv("./data/Q_matrix.csv", sep = ";")
+
+head(Q[,1:6])
+dim(Q)
+```
+
+Site-level information, including minimallt a column specifying a reference group of sites from which the reference range of variablity will be calculated.
+
+```{r}
+gradient<-read.csv("./data/gradient.csv", sep = ";")
+
+head(gradient)
+dim(gradient)
+```
+
+
+#### Step 2 - Community weighted mean traits
+
+Following Cardou et al. (2020), we weight effect traits by their relative occurrence in the whole community, and response traits by their relative occurence in the understory layer (0-6m).
+
+Traits weighted by relative occurences of species in the whole community:
+
+```{r}
+# Create a Site-by-Species matrix
+Q_matrix <- as.matrix(Q[,-1], nrow = nrows(Q)) 
+rownames(Q_matrix) <- Q[,1]
+storage.mode(Q_matrix) <- "numeric"
+
+# Community-weighted traits to be calculated
+traits <- c("RSD_05", "RSD_510","ldmc") 
+
+# Create Site-by-Species matrix
+comm_raw <- comm_raw[order(comm_raw$site),] 
+L_matrix <- as.matrix(comm_raw[,-1], 
+                         nrow = nrows(L_matrix))
+rownames(L_matrix) <- comm_raw[,1]
+L_matrix <- L_matrix[, order(colnames(L_matrix))]
+
+# Calculate CWM traits using functcomp function in package FD
+whole_cwm <- functcomp(Q_matrix[,traits], 
+                       L_matrix, 
+                       bin.num = c("RSD_05", 
+                                  "RSD_510"))
+
+rm(L_matrix, traits)
+```
+
+Traits weighted by relative occurences of species in the understory:
+
+```{r}
+# Community-weighted traits to be calculated
+traits <- c("SDPRO_std", 
+            "DI_an",
+            "DI_ex", 
+            "DI_ez", 
+            "DI_hd", 
+            "DI_w_short",
+            "PER_1",
+            "RA_g", 
+            "RA_h",
+            "RSD_05")
+
+# Create a Site-by-Species matrix
+comm_sbstrate_raw <- comm_sbstrate_raw[order(comm_sbstrate_raw$site),] 
+L_matrix <- as.matrix(comm_sbstrate_raw[,-1], 
+                         nrow = nrows(comm_sbstrate_raw))
+rownames(L_matrix) <- comm_sbstrate_raw[,1]
+L_matrix <- L_matrix[, order(colnames(L_matrix))]
+
+# Calculate CWM traits using functcomp function in package FD
+sbstrate_cwm <- functcomp(Q_matrix[,traits], 
+                          L_matrix, 
+                          bin.num = c("DI_an",
+                                      "DI_ex", 
+                                      "DI_ez", 
+                                      "DI_hd", 
+                                      "DI_w_short",
+                                      "PER_1",
+                                      "RA_g", 
+                                      "RA_h",
+                                      "RSD_05"))
+
+rm(L_matrix, traits)
+
+```
+
+Because these functional markers are based on linear methods, traits must be transformed to ensure the linearity of trait-environment relationships, following those used in Cardou et al. (2020). We assemble individual datasets that will be used to generate estimates for three ecosystem properties: colonization, water infiltration and decomposition.
+
+```{r warning = FALSE}
+# Colonisation markers
+colo.dat <- data.frame(
+  "SDPRO_std_sbstrate" = sbstrate_cwm$SDPRO_std,
+  "DI_an_sbstrate" = sqrt(sbstrate_cwm$DI_an),
+  "DI_ex_sbstrate" = log(sbstrate_cwm$DI_ex + 0.01),
+  "DI_ez_sbstrate" = logit(sbstrate_cwm$DI_ez),
+  "DI_hd_sbstrate" = log(sbstrate_cwm$DI_hd + 0.01),
+  "DI_w_short_sbstrate" = logit(sbstrate_cwm$DI_w_short),
+  row.names = row.names(sbstrate_cwm))
+
+# Water infiltration markers
+comp.dat <- data.frame(
+  "RSD_05" = logit(whole_cwm$RSD_05),
+  "RSD_510" = whole_cwm$RSD_510,
+  row.names = row.names(whole_cwm))
+
+# Decomposition markers
+decomp.dat <- data.frame(
+  "ldmc" = whole_cwm$ldmc,
+  "PER_1_sbstrate" = sqrt(sbstrate_cwm$PER_1),
+  "RA_g_sbstrate" = sbstrate_cwm$RA_g,
+  "RA_h_sbstrate" = log(sbstrate_cwm$RA_h + 0.01),
+  "RSD_05_sbstrate" = sqrt(sbstrate_cwm$RSD_05),
+  row.names = row.names(sbstrate_cwm))
+```
+
+
+#### Step 3 - Estimation of ecosystem properties from functional markers
+
+*Colonisation*
+
+Colonisation is estimated as the log-transformed distance to the nearest woodland neighbour, weighted by the area of that neighbour, it is therefore a measure of patch isolation (inversely related to colonisation). Linear model components and coefficients:
+
+* Intercept: 12.0423089
+* SDPRO_std_sbstrate : -7.9732122
+* DI_an_sbstrate : -14.9067417
+* DI_ex_sbstrate : -0.5531921
+* DI_ez_sbstrate : -1.5129370
+* DI_hd_sbstrate : 1.9339788
+* DI_w_short_sbstrate : -1.1228992
+     
+
+```{r}
+colo.coef <- setNames(
+  c(12.0423089, -7.9732122, -14.9067417, -0.5531921, -1.5129370,  1.9339788,-1.1228992), 
+  c("(Intercept)", "SDPRO_std_sbstrate", "DI_an_sbstrate", "DI_ex_sbstrate", "DI_ez_sbstrate", "DI_hd_sbstrate", "DI_w_short_sbstrate"))
+
+
+func.dat <- data.frame(
+  "colo" = model.matrix( 
+    ~ SDPRO_std_sbstrate + DI_an_sbstrate + DI_ex_sbstrate + DI_ez_sbstrate + DI_hd_sbstrate + DI_w_short_sbstrate, colo.dat)  
+  %*% colo.coef)
+```
+
+*Water infiltration*
+
+Water infiltration is estimated at the slope of the increase in (square-root transformed) soil strength along the soil profile. Higher slopes indicate a sharper increase in soil compaction, and therefore less water infiltration. Linear model components and coefficients:
+
+  * Intercept : 11.8292221
+  * RSD_05 : 0.1281831
+  * RSD_510 : -2.2903915
+
+```{r}
+
+comp.coef <- setNames(c(11.8292221, 0.1281831, -2.2903915), 
+                      c("(Intercept)", "RSD_05", "RSD_510"))
+
+
+func.dat$comp <- unname(model.matrix( ~ RSD_05 + RSD_510, comp.dat)  
+                        %*% comp.coef)
+```
+
+*Decomposition*
+
+Decomposition of the litter layer is estimated as the fractionated annual loss in carbon from the leaf component of the forest floor. Values range from 0 (very slow) to 1 (very fast). Linear model components and coefficients:
+
+  * Intercept : 1.087499072
+  * ldmc : -0.002255306
+  * PER_1_sbstrate : 0.538888332
+  * RA_g_sbstrate : -0.586800478
+  * RA_h_sbstrate : -0.096672035
+  * RSD_05_sbstrate : 0.300513229 
+
+```{r}
+
+decomp.coef <- setNames(
+  c(1.087499072, -0.002255306, 0.538888332, -0.586800478, -0.096672035, 0.300513229), 
+  c("(Intercept)", "ldmc", "PER_1_sbstrate", "RA_g_sbstrate", "RA_h_sbstrate", "RSD_05_sbstrate"))
+
+func.dat$decomp <- unname(model.matrix( ~ ldmc + PER_1_sbstrate + RA_g_sbstrate + RA_h_sbstrate + RSD_05_sbstrate, decomp.dat)  
+                        %*% decomp.coef)
+
+
+func.dat$ref <- gradient$ref[match(row.names(func.dat),gradient$site)]
+
+
+rm(list=ls(pattern=".coef"),
+  colo.dat, comp.dat, decomp.dat)
+
+```
+
+Having estimated each of our three ecosystem properties, we can visualize ecosystem multifunctionality in 3D space. We can see that reference sites (category 1) are constrained in some dimensions and variables in others. 
+
+```{r echo = F, fig.height = 5, fig.width = 5}
+func.plot <- scatter3D(-func.dat$colo, # Inversely related to patch isolation
+                       -func.dat$comp, # Inversely related to compaction slope
+                       func.dat$decomp, # Directly related to fractionnated carbon loss
+                       colvar = func.dat$ref, 
+                       colkey = FALSE,
+                       col = c("darkorange","mediumseagreen"),
+                       pch= 16, cex = 1, 
+                       bty = "b2", 
+                       ticktype = "simple",
+                       phi = 0, theta = 45, 
+                       main = "Estimated ecosystem properties", 
+                       xlab = "Colonization", 
+                       ylab ="Water infiltration", 
+                       zlab = "Decomposition",
+                       font=3
+          ) 
+
+```
+
+
+#### Step 4 - Functional Mahalanobis distance
+
+The next step is to quantify the departure of each site relative to a range of variability across our three dimensions. To this end, we first define a reference set of sites, and a vector with all ecosystem properties (multifunctionality dimensions) of interest.
+
+```{r}
+ref.range.var <- which(func.dat$ref == "1")
+multifunc <- c("colo", "comp", "decomp")
+
+```
+
+We then calcultate the distance of each site relative to the center point and the variance structure of these reference sites. This yields the functional mahalanobis distance of each woodland relative to a reference range of variability.
+
+```{r}
+func.mdis.uni <- mahalanobis(func.dat[, multifunc], # Select multifunctionality axes
+                  colMeans(func.dat[ref.range.var, multifunc]), # Mean multifunctionality among for reference sites
+                  cov(func.dat[ref.range.var, multifunc]), # Variance structure of reference sites
+                  tol=1e-32); 
+
+func.mdis.uni <- data.frame(site = names(func.mdis.uni), 
+                            fmd = unname(func.mdis.uni))
+
+dim(func.mdis.uni)
+str(func.mdis.uni)
+head(func.mdis.uni)
+
+
+```
+
+
+#### Step 5 - Visualize
+
+We can then visualize the results to compare the integrity of different urban woodlands relative to the reference set:
+
+```{r}
+
+fmd.dat <- data.frame(row.names = row.names(func.dat))
+fmd.dat$fmd <- func.mdis.uni$fmd[match(row.names(fmd.dat), func.mdis.uni$site)]
+fmd.dat$ref <- gradient$ref[match(row.names(fmd.dat), gradient$site)]
+fmd.dat$site <- row.names(fmd.dat)
+fmd.dat$site <- factor(fmd.dat$site, levels = unique(fmd.dat$site))
+
+```
+
+```{r fig.height = 10, fig.width = 8}
+
+fmd.dat <- fmd.dat[order(abs(fmd.dat[, c("fmd")])),]
+fmd.dat$site <- factor(fmd.dat$site, levels = unique(fmd.dat$site))
+
+outlier.plot <- ggplot(fmd.dat, 
+                      aes(x=abs(fmd), 
+                          y = site, 
+                          colour=as.factor(ref))) +
+                      geom_point(aes(), size = 3)+
+                      ggtitle("Site Multifunctionality") +
+                      xlab("Functional Mahalanobis Distance") + ylab("Site") +
+                      scale_colour_manual(values=c("darkorange",
+                                                   "mediumseagreen")) +
+                      theme(legend.position = "top",
+                            legend.justification = c(1, 0.1),
+                            legend.direction = "horizontal")
+
+print(outlier.plot)
+
+
+```
+
+#### References
+
+Cardou, F., Aubin, I., Bergeron, A., et Shipley, B. (2020). Functional markers to predict forest ecosystem properties along a rural‐to‐urban gradient. J. Veg. Sci. 31, 509‑517.
+
+Cardou, F. (2020). Développement d’un indicateur d’intégrité écologique en milieux anthropisés: application de l’approche par traits fonctionnels. PhD Thesis, Université de Sherbrooke.
+
+Manning, P., Van Der Plas, F., Soliveres, S., Allan, E., Maestre, F. T., Mace, G., Whittingham, M. J., et Fischer, M. (2018). Redefining ecosystem multifunctionality 2, 427‑436.
+
+Parrish, J. D., Braun, D. P., et Unnasch, R. S. (2003). Are We Conserving What We Say We Are? Measuring Ecological Integrity within Protected Areas. Bioscience 53, 851.
