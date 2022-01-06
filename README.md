@@ -2,7 +2,7 @@
 
 Data for Cardou et al UFUG 2022
 
-Cite as: Cardou et al. 2022. Multifunctionality in practice: measuring differences in urban woodland ecosystem properties via functional traits. Urban Forestry and Urban Greening. DOI:. Please do not use without prior permission.
+Cite as: Cardou et al. Multifunctionality in practice: measuring differences in urban woodland ecosystem properties via functional traits. Urban Forestry and Urban Greening. DOI:. Please do not use without prior permission.
 
 Dataset names:
 -	AppendixE
